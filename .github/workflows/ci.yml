@@ -2,6 +2,8 @@ name: Web Application CI/CD Workflow
 
 on:
   workflow_dispatch: # allows manual trigger of the workflow
+  schedule:
+    - cron: "0 0 * * *" # runs daily at midnight UTC
 
 jobs:
   test:
@@ -66,3 +68,31 @@ jobs:
           echo "Checking container logs for debugging:"
           docker logs flask-container
           curl --fail http://localhost:5001 || (echo "Container is not running!" && exit 1)
+
+      - name: Stop Docker container
+        run: |
+          echo "Stopping the container..."
+          docker stop flask-container
+          docker rm flask-container
+
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Clean up old Docker images
+        run: |
+          echo "Fetching image list..."
+          images=$(curl -s -u "${{ secrets.DOCKER_USERNAME }}:${{ secrets.DOCKER_PASSWORD }}" \
+            "https://hub.docker.com/v2/repositories/${{ secrets.DOCKER_USERNAME }}/flask-ci-cd/tags/" | jq -r '.results[].name' | grep -v latest)
+
+          echo "Deleting old images..."
+          for image in $images; do
+            curl -s -X DELETE -u "${{ secrets.DOCKER_USERNAME }}:${{ secrets.DOCKER_PASSWORD }}" \
+              "https://hub.docker.com/v2/repositories/${{ secrets.DOCKER_USERNAME }}/flask-ci-cd/tags/$image/"
+            echo "Deleted $image"
+          done
