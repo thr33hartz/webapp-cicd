@@ -82,6 +82,6 @@ jobs:
           package-name: 'flask-ci-cd'        
           package-type: 'container'          
           min-versions-to-keep: 3            
-          ignore-tags: 'latest'              
-          delete-untagged-versions: true      
+          ignore-versions: 'latest'              
+          delete-only-untagged-versions: true      
           token: ${{ secrets.GITHUB_TOKEN }}
