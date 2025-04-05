@@ -73,19 +73,15 @@ jobs:
   cleanup:
     needs: build-and-push # ensure cleanup runs after build-and-push
     runs-on: ubuntu-latest
+    permissions: 
+      packages: write # required to delete images
     steps:
-      - name: Log in to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Clean up old Docker images
-        run: |
-          echo "Fetching image list..."
-          images=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://ghcr.io/v2/${{ github.repository_owner }}/flask-ci-cd/tags/list" | jq -r '.tags[]' | grep -v latest)
-
-          echo "Deleting old images..."
-          for image in $images; do
-            curl -s -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://ghcr.io/v2/${{ github.repository_owner }}/flask-ci-cd/manifests/$image"
-            echo "Deleted $image"
-          done
+      - name: Delete old container image versions (keep 3 latest) 
+        uses: actions/delete-package-versions@v5 
+        with:
+          package-name: 'flask-ci-cd'        
+          package-type: 'container'          
+          min-versions-to-keep: 3            
+          ignore-tags: 'latest'              
+          delete-untagged-versions: true      
+          token: ${{ secrets.GITHUB_TOKEN }}
