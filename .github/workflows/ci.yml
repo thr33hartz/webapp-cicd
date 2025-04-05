@@ -2,8 +2,6 @@ name: Web Application CI/CD Workflow
 
 on:
   workflow_dispatch: # allows manual trigger of the workflow
-  schedule:
-    - cron: "0 0 * * *" # runs daily at midnight UTC
 
 jobs:
   test:
