@@ -76,6 +76,7 @@ jobs:
           docker rm flask-container
 
   cleanup:
+    needs: build-and-push # ensure cleanup runs after build-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Log in to Docker Hub
