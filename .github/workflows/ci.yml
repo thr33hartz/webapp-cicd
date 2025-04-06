@@ -79,13 +79,12 @@ jobs:
           docker run -d --name flask-container -p 5001:5001 ghcr.io/${{ github.repository_owner }}/flask-ci-cd:${{ steps.meta.outputs.version }}
 
       - name: Verify Docker container is running
-        run: |
-          echo "Waiting for the container to start..."
-          sleep 5
-          echo "Checking container logs for debugging:"
-          docker logs flask-container
-          curl --fail http://localhost:5001 || (echo "Container is not running!" && exit 1)
-          
+        uses: jtalk/url-health-check-action@v4
+        with:
+          url: http://localhost:5001
+          max-attempts: 15
+          retry-delay: 3s
+
       - name: Stop Docker container
         run: |
           echo "Stopping the container..."

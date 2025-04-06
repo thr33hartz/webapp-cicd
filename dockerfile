@@ -11,4 +11,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--log-level", "debug", "--error-logfile", "-", "webapp.app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:5001", "webapp.app:app"]
