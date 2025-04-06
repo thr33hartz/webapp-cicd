@@ -16,16 +16,16 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.10'
       
       - name: Cache pip dependencies # cache pip dependencies
         # this step caches the pip dependencies to speed up the workflow
         uses: actions/cache@v4
         with: 
           path: ~/.cache/pip
-          key: ${{ runner.os }}-python-${{ matrix.python-version || '3.8' }}-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-python-${{ matrix.python-version || '3.10' }}-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-python-${{ matrix.python-version || '3.8' }}-
+            ${{ runner.os }}-python-${{ matrix.python-version || '3.10' }}-
             ${{ runner.os }}-python-
 
       - name: Install dependencies
