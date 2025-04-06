@@ -45,6 +45,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch all history for all branches and tags
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -52,48 +54,33 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Set image tag from git SHA
-        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/flask-ci-cd
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=ref,event=tag
 
-      - name: Extract Git tag name (if triggered by tag)
-        id: get_git_tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: echo "value=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Build and push Docker image
-        run: |
-          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/flask-ci-cd 
-          GIT_TAG="${{ steps.get_git_tag.outputs.value }}"
-          
-          echo "Building Docker image $IMAGE_ID:${{ env.IMAGE_TAG }}"
-          docker build -t $IMAGE_ID:${{ env.IMAGE_TAG }} .
-
-          echo "Pushing image $IMAGE_ID:${{ env.IMAGE_TAG }}"
-          docker push $IMAGE_ID:${{ env.IMAGE_TAG }}
-
-          if [[ -n "$GIT_TAG" ]]; then
-            echo "Workflow triggered by Git tag: $GIT_TAG"
-            # Tag the same image (identified by SHA tag) with the Git tag
-            echo "Tagging $IMAGE_ID:${{ env.IMAGE_TAG }} as $IMAGE_ID:$GIT_TAG"
-            docker tag $IMAGE_ID:${{ env.IMAGE_TAG }} $IMAGE_ID:$GIT_TAG
-            # Push the Git tag
-            echo "Pushing image $IMAGE_ID:$GIT_TAG"
-            docker push $IMAGE_ID:$GIT_TAG
-          else
-            echo "Workflow not triggered by a v* tag push. Skipping Git tag push."
-          fi
+      - name: Build and push Docker image using Actions
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Run Docker container
         run: |
-          docker run -d --name flask-container -p 5001:5001 ghcr.io/${{ github.repository_owner }}/flask-ci-cd:${{ env.IMAGE_TAG }}
+          docker run -d --name flask-container -p 5001:5001 ghcr.io/${{ github.repository_owner }}/flask-ci-cd:${{ steps.meta.outputs.version }}
 
       - name: Verify Docker container is running
         run: |
-          echo "Waiting for the container to start..."
-          sleep 5
-          echo "Checking container logs for debugging:"
-          docker logs flask-container
-          curl --fail http://localhost:5001 || (echo "Container is not running!" && exit 1)
+          docker run -d --name flask-container -p 5001:5001 ghcr.io/${{ github.repository_owner }}/flask-ci-cd:${{ steps.meta.outputs.tags }}
 
       - name: Stop Docker container
         run: |
