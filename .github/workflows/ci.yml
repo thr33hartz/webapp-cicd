@@ -80,8 +80,12 @@ jobs:
 
       - name: Verify Docker container is running
         run: |
-          docker run -d --name flask-container -p 5001:5001 ghcr.io/${{ github.repository_owner }}/flask-ci-cd:${{ steps.meta.outputs.tags }}
-
+          echo "Waiting for the container to start..."
+          sleep 5
+          echo "Checking container logs for debugging:"
+          docker logs flask-container
+          curl --fail http://localhost:5001 || (echo "Container is not running!" && exit 1)
+          
       - name: Stop Docker container
         run: |
           echo "Stopping the container..."
