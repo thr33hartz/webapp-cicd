@@ -1,6 +1,8 @@
 name: Web Application CI/CD Workflow
 
 on:
+  tags:
+    - 'v*.*.*' # trigger on version tags
   workflow_dispatch: # allows manual trigger of the workflow
 
 jobs:
@@ -41,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -49,13 +51,36 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Set image tag
+      - name: Set image tag from git SHA
         run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Extract Git tag name (if triggered by tag)
+        id: get_git_tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "value=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/flask-ci-cd:${{ env.IMAGE_TAG }} . 
-          docker push ghcr.io/${{ github.repository_owner }}/flask-ci-cd:${{ env.IMAGE_TAG }}
+          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/flask-ci-cd 
+          GIT_TAG="${{ steps.get_git_tag.outputs.value }}"
+          
+          echo "Building Docker image $IMAGE_ID:${{ env.IMAGE_TAG }}"
+          docker build -t $IMAGE_ID:${{ env.IMAGE_TAG }} .
+
+          echo "Pushing image $IMAGE_ID:${{ env.IMAGE_TAG }}"
+          docker push $IMAGE_ID:${{ env.IMAGE_TAG }}
+
+          if [[ -n "$GIT_TAG" ]]; then
+            echo "Workflow triggered by Git tag: $GIT_TAG"
+            # Tag the same image (identified by SHA tag) with the Git tag
+            echo "Tagging $IMAGE_ID:${{ env.IMAGE_TAG }} as $IMAGE_ID:$GIT_TAG"
+            docker tag $IMAGE_ID:${{ env.IMAGE_TAG }} $IMAGE_ID:$GIT_TAG
+            # Push the Git tag
+            echo "Pushing image $IMAGE_ID:$GIT_TAG"
+            docker push $IMAGE_ID:$GIT_TAG
+          else
+            echo "Workflow not triggered by a v* tag push. Skipping Git tag push."
+          fi
 
       - name: Run Docker container
         run: |
@@ -88,5 +113,5 @@ jobs:
           package-type: 'container'          
           min-versions-to-keep: 3            
           ignore-versions: 'latest'              
-          delete-only-untagged-versions: true      
+          delete-only-untagged-versions: false      
           token: ${{ secrets.GITHUB_TOKEN }}
