@@ -8,14 +8,14 @@ on:
 
 jobs:
   test:
-    uses: ./.github/workflows/jobs/test.yml
+    uses: ./.github/workflows/test.yml
 
   build-push:
     needs: test
-    uses: ./.github/workflows/jobs/build_push.yml
+    uses: ./.github/workflows/build_push.yml
     secrets: inherit
 
   cleanup:
     needs: build-push
-    uses: ./.github/workflows/jobs/cleanup.yml
+    uses: ./.github/workflows/cleanup.yml
     secrets: inherit
