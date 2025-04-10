@@ -1,0 +1,32 @@
+name: Deploy to Kubernetes using Helm
+
+on:
+    workflow_call:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v1
+        with:
+          version: 'v3.10.3' 
+
+      - name: Set up Kubernetes
+        uses: azure/setup-kubernetes@v3
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+
+      - name: Deploy to Kubernetes using Helm
+        run: |
+          helm upgrade --install flask-app ./helm-chart \
+            --namespace default \
+            --set image.repository=ghcr.io/${{ github.repository_owner }}/flask-ci-cd \
+            --set image.tag=${{ github.sha }} \
+            --set replicaCount=2
+
+      - name: Check rollout status
+        run: kubectl rollout status deployment/flask-app --namespace default
