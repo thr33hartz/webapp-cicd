@@ -5,30 +5,30 @@ on:
 
 runs-on: ubuntu-latest
 steps:
-    - name: Checkout code
+  - name: Checkout code
     uses: actions/checkout@v4
 
-    - name: Set up Python
+  - name: Set up Python
     uses: actions/setup-python@v5
     with:
-        python-version: '3.10'
+      python-version: '3.10'
     
-    - name: Cache pip dependencies # cache pip dependencies
+  - name: Cache pip dependencies # cache pip dependencies
     # this step caches the pip dependencies to speed up the workflow
     uses: actions/cache@v4
     with: 
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-python-${{ matrix.python-version || '3.10' }}-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
+      path: ~/.cache/pip
+      key: ${{ runner.os }}-python-${{ matrix.python-version || '3.10' }}-${{ hashFiles('**/requirements.txt') }}
+      restore-keys: |
         ${{ runner.os }}-python-${{ matrix.python-version || '3.10' }}-
         ${{ runner.os }}-python-
 
-    - name: Install dependencies
+  - name: Install dependencies
     run: |
-        pip install -r requirements.txt
+      pip install -r requirements.txt
 
-    - name: Run tests
+  - name: Run tests
     env:
-        PYTHONPATH: ${{ github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}
     run: |
-        pytest
+      pytest
