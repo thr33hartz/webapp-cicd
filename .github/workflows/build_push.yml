@@ -1,0 +1,61 @@
+name: Build and Push Docker Image
+
+on:
+  workflow_call:
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch all history for all branches and tags
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/flask-ci-cd
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=ref,event=tag
+            type=raw,value=latest 
+
+      - name: Build and push Docker image using Actions
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Docker container
+        run: |
+          docker run -d --name flask-container -p 5001:5001 ghcr.io/${{ github.repository_owner }}/flask-ci-cd:${{ steps.meta.outputs.version }}
+
+      - name: Wait for the container to start
+        run: sleep 10 # wait for the container to start
+
+      - name: Health check for the container
+        uses: jtalk/url-health-check-action@v4
+        with:
+          url: http://localhost:5001
+          max-attempts: 15
+          retry-delay: 3s
+
+      - name: Stop Docker container
+        run: |
+          echo "Stopping the container..."
+          docker stop flask-container
+          docker rm flask-container

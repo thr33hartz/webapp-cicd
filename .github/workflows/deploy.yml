@@ -1,0 +1,39 @@
+name: Deploy to Minikube via Helm (local runner)
+
+on:
+  workflow_call:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch all history for all branches and tags
+
+      - name: Set KUBECONFIG env (minikube)
+        run: |
+          echo "🔧 Setting KUBECONFIG..."
+          export KUBECONFIG=$HOME/.kube/config
+          kubectl config current-context
+          kubectl get nodes
+
+      - name: Set up Helm
+        run: |
+          helm version
+          helm lint ./helm-chart
+
+      - name: Deploy with Helm
+        run: |
+          helm uninstall flask-app || true
+          helm upgrade --install flask-app ./helm-chart \
+          --namespace default \
+          --set image.repository=ghcr.io/thr33hartz/flask-ci-cd \
+          --set image.tag=latest \
+          --set replicaCount=2 \
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/flask-app --namespace default

@@ -1,0 +1,26 @@
+name: Continuous Integration and Deployment (CI/CD)
+
+on:
+  push: 
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-push:
+    needs: test
+    uses: ./.github/workflows/build_push.yml
+    secrets: inherit
+
+  cleanup:
+    needs: build-push
+    uses: ./.github/workflows/cleanup.yml
+    secrets: inherit
+  
+  deploy:
+    needs: cleanup
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
