@@ -31,7 +31,7 @@ jobs:
           helm upgrade --install flask-app ./helm-chart \
           --namespace default \
           --set image.repository=ghcr.io/thr33hartz/flask-ci-cd \
-          --set image.tag=latest \
+          --set image.tag=${{ github.ref_name }} \
           --set replicaCount=2 \
 
       - name: Wait for rollout
