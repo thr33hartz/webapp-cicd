@@ -1,0 +1,28 @@
+name: CI/CD Pipeline
+
+on:
+  workflow_dispatch: 
+  push:
+    tags:
+      - 'v*.*.*' 
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-push:
+    needs: test
+    uses: ./.github/workflows/build_push.yml
+    secrets: inherit
+
+  deploy:
+    needs: build-push
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      sha: ${{ github.sha }}
+
+  cleanup:
+    needs: build-push
+    uses: ./.github/workflows/cleanup.yml
+    secrets: inherit

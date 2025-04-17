@@ -1,0 +1,64 @@
+name: Deploy to Amazon EKS
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        required: true
+        type: string
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  EKS_CLUSTER_NAME: webapp-cluster
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+
+      - name: Extract short SHA
+        id: vars
+        run: echo "sha_short=$(echo ${{ inputs.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install flask-app ./helm/flask-app \
+            --namespace default \
+            --set image.repository=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY \
+            --set image.tag=sha-${{ steps.vars.outputs.sha_short }}
+
+      - name: Check rollout status
+        run: |
+          kubectl rollout status deployment/flask-app --namespace default
+
+      - name: Write deploy summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy Time: \`$(date -u)\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployed Image Tag: \`sha-${{ steps.vars.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Cluster: \`${{ env.EKS_CLUSTER_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Namespace: \`default\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Helm Release: \`flask-app\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Git Commit: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY

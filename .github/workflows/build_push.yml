@@ -1,0 +1,74 @@
+name: Build and Push to Amazon ECR
+
+on: [workflow_call]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: true
+
+      - name: Extract short SHA
+        id: vars
+        run: echo "sha_short=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest \
+                       -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:sha-${{ steps.vars.outputs.sha_short }} .
+
+      - name: Push Docker image
+        run: |
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:sha-${{ steps.vars.outputs.sha_short }}
+
+      - name: Run container in background
+        run: |
+          docker run -d -p 5001:5001 --name test-container \
+            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:sha-${{ steps.vars.outputs.sha_short }}
+
+      - name: Wait before health check
+        run: sleep 10
+
+      - name: Health check for the container
+        id: health
+        uses: jtalk/url-health-check-action@v4
+        with:
+          url: http://localhost:5001
+          max-attempts: 15
+          retry-delay: 3s
+        continue-on-error: true
+
+      - name: Stop and remove test container
+        if: always()
+        run: docker rm -f test-container || true
+
+      - name: Write build summary
+        run: |
+          echo "## Build & Push Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Build Time: \`$(date -u)\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Image tag: \`sha-${{ steps.vars.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ECR Repository: [${{ env.ECR_REPOSITORY }}](https://${{ env.AWS_REGION }}.console.aws.amazon.com/ecr/repositories/private/${{ env.AWS_ACCOUNT_ID }}/${{ env.ECR_REPOSITORY }}?region=${{ env.AWS_REGION }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Git Commit: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Diff: [compare](https://github.com/${{ github.repository }}/compare/${{ github.event.before || github.sha }}...${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Health check: $([[ '${{ steps.health.outcome }}' == 'success' ]] && echo 'Passed' || echo 'Failed')" >> $GITHUB_STEP_SUMMARY

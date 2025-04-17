@@ -1,0 +1,34 @@
+name: Cleanup ECR Images
+
+on: [workflow_call]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Keep only last 3 images
+        env:
+          REPO: flask-ci-cd
+        run: |
+          aws ecr describe-images \
+            --repository-name $REPO \
+            --query "sort_by(imageDetails,& imagePushedAt)[::-1]" \
+            --output json > all.json
+
+          # Оставляем только первые 3
+          cat all.json | jq -r ".[3:] | .[].imageDigest" > delete.txt
+
+          # Удаляем
+          while read digest; do
+            aws ecr batch-delete-image \
+              --repository-name $REPO \
+              --image-ids imageDigest=$digest || true
+          done < delete.txt
