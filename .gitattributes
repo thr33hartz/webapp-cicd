@@ -1,0 +1,2 @@
+helm/** linguist-vendored=true
+*.tpl linguist-vendored=true
